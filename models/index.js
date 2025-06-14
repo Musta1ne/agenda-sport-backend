@@ -1,38 +1,50 @@
-const Sequelize = require('sequelize');
-const sequelize = require('../config/database');
+"use strict";
 
-// Importar modelos
-const User = require('./User');
-const Venue = require('./Venue');
-const Court = require('./Court');
-const Sport = require('./Sport');
-const Booking = require('./Booking');
+const fs = require("fs");
+const path = require("path");
+const Sequelize = require("sequelize");
+const process = require("process");
+const basename = path.basename(__filename);
+const env = process.env.NODE_ENV || "development";
+const config = require(__dirname + "/../config/config.json")[env];
+const db = {};
 
-// Configurar relaciones
+let sequelize;
+if (config.use_env_variable) {
+  sequelize = new Sequelize(process.env[config.use_env_variable], config);
+} else {
+  sequelize = new Sequelize(
+    config.database,
+    config.username,
+    config.password,
+    config
+  );
+}
 
-// Venue - Court
-Venue.hasMany(Court, { foreignKey: 'venueId' });
-Court.belongsTo(Venue, { foreignKey: 'venueId' });
+fs.readdirSync(__dirname)
+  .filter((file) => {
+    return (
+      file.indexOf(".") !== 0 &&
+      file !== basename &&
+      file.slice(-3) === ".js" &&
+      file.indexOf(".test.js") === -1
+    );
+  })
+  .forEach((file) => {
+    const model = require(path.join(__dirname, file))(
+      sequelize,
+      Sequelize.DataTypes
+    );
+    db[model.name] = model;
+  });
 
-// Sport - Court
-Sport.hasMany(Court, { foreignKey: 'sportId' });
-Court.belongsTo(Sport, { foreignKey: 'sportId' });
+Object.keys(db).forEach((modelName) => {
+  if (db[modelName].associate) {
+    db[modelName].associate(db);
+  }
+});
 
-// User - Booking
-User.hasMany(Booking, { foreignKey: 'userId' });
-Booking.belongsTo(User, { foreignKey: 'userId' });
+db.sequelize = sequelize;
+db.Sequelize = Sequelize;
 
-// Court - Booking
-Court.hasMany(Booking, { foreignKey: 'courtId' });
-Booking.belongsTo(Court, { foreignKey: 'courtId' });
-
-// Exportar modelos y sequelize
-module.exports = {
-  sequelize,
-  Sequelize,
-  User,
-  Venue,
-  Court,
-  Sport,
-  Booking
-};
+module.exports = db;
