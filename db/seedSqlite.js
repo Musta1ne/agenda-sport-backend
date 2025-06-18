@@ -58,10 +58,35 @@ async function seed() {
   ];
 
   for (const c of canchas) {
-    await db.run(
+    const result = await db.run(
       "INSERT INTO canchas (nombre, tipo, tipo_superficie, estado, precio, imagen, id_deporte) VALUES (?, ?, ?, ?, ?, ?, ?)",
       [c.nombre, c.tipo, c.tipo_superficie, c.estado, c.precio, c.imagen, c.id_deporte]
     );
+    const canchaId = result.lastID;
+    // Agregar horarios según el tipo de cancha
+    if (c.tipo === 'Pádel') {
+      // Turnos de 1:30h, de 8:00 a 23:00
+      let hora = 8 * 60; // minutos
+      while (hora + 90 <= 23 * 60) {
+        const hInicio = Math.floor(hora / 60).toString().padStart(2, '0') + ':' + (hora % 60).toString().padStart(2, '0');
+        const hFin = Math.floor((hora + 90) / 60).toString().padStart(2, '0') + ':' + ((hora + 90) % 60).toString().padStart(2, '0');
+        await db.run(
+          "INSERT INTO horarios (id_cancha, dia_semana, hora_inicio, hora_fin, activo) VALUES (?, ?, ?, ?, 1)",
+          [canchaId, 'todos', hInicio, hFin]
+        );
+        hora += 90;
+      }
+    } else {
+      // Fútbol 5 y 7: turnos de 1h, de 8:00 a 23:00
+      for (let h = 8; h < 23; h++) {
+        const hInicio = h.toString().padStart(2, '0') + ':00';
+        const hFin = (h + 1).toString().padStart(2, '0') + ':00';
+        await db.run(
+          "INSERT INTO horarios (id_cancha, dia_semana, hora_inicio, hora_fin, activo) VALUES (?, ?, ?, ?, 1)",
+          [canchaId, 'todos', hInicio, hFin]
+        );
+      }
+    }
   }
 
   console.log('Base de datos SQLite poblada con datos de ejemplo.');

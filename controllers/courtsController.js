@@ -10,7 +10,8 @@ export async function getCourtAvailability(req, res) {
   const horarios = await db.all('SELECT * FROM horarios WHERE id_cancha = ? AND activo = 1', [id]);
   const reservas = await db.all('SELECT * FROM reservas WHERE id_cancha = ? AND estado = ?', [id, 'activa']);
   const bloqueos = await db.all('SELECT * FROM bloqueos WHERE id_cancha = ?', [id]);
-  res.json({ horarios, reservas, bloqueos });
+  const cancha = await db.get('SELECT tipo FROM canchas WHERE id = ?', [id]);
+  res.json({ horarios, reservas, bloqueos, tipo: cancha?.tipo || null });
 }
 
 export async function getCourtBookings(req, res) {
