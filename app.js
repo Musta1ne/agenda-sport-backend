@@ -22,7 +22,7 @@ app.use('/api/sports', sportRoutes);
 app.use('/api/blocks', blockRoutes);
 
 app.get('/', (req, res) => {
-  res.send('API de Reservas de Canchas funcionando con MongoDB');
+  res.send('API de Reservas de Canchas funcionando con MongoDB - TEST CAMBIO');
 });
 
 app.get('/api/test-db', (req, res) => {
