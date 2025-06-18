@@ -5,6 +5,7 @@ import courtRoutes from './routes/courts.js';
 import bookingRoutes from './routes/bookings.js';
 import sportRoutes from './routes/sports.js';
 import blockRoutes from './routes/blocks.js';
+import mongoose from 'mongoose';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -22,6 +23,15 @@ app.use('/api/blocks', blockRoutes);
 
 app.get('/', (req, res) => {
   res.send('API de Reservas de Canchas funcionando con MongoDB');
+});
+
+app.get('/api/test-db', (req, res) => {
+  res.json({
+    db: mongoose.connection.name,
+    host: mongoose.connection.host,
+    user: mongoose.connection.user,
+    uri: process.env.MONGODB_URI
+  });
 });
 
 app.listen(PORT, () => {
