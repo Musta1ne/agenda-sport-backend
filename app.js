@@ -115,4 +115,4 @@ connectSQLite().then(async db => {
   });
 });
 
-export default app; 
+export default app;
