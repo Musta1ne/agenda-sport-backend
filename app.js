@@ -34,6 +34,4 @@ app.get('/api/test-db', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Servidor escuchando en http://localhost:${PORT}`);
-}); 
+export default app; 
