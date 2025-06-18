@@ -1,25 +1,22 @@
-import Cancha from '../models/Cancha.js';
-import Horario from '../models/Horario.js';
-import Reserva from '../models/Reserva.js';
-import Bloqueo from '../models/Bloqueo.js';
-
 export async function getCourts(req, res) {
-  const courts = await Cancha.find();
+  const db = req.app.locals.db;
+  const courts = await db.all('SELECT * FROM canchas');
   res.json(courts);
 }
 
 export async function getCourtAvailability(req, res) {
+  const db = req.app.locals.db;
   const { id } = req.params;
-  const horarios = await Horario.find({ id_cancha: id, activo: true });
-  const reservas = await Reserva.find({ id_cancha: id, estado: 'activa' });
-  const bloqueos = await Bloqueo.find({ id_cancha: id });
+  const horarios = await db.all('SELECT * FROM horarios WHERE id_cancha = ? AND activo = 1', [id]);
+  const reservas = await db.all('SELECT * FROM reservas WHERE id_cancha = ? AND estado = ?', [id, 'activa']);
+  const bloqueos = await db.all('SELECT * FROM bloqueos WHERE id_cancha = ?', [id]);
   res.json({ horarios, reservas, bloqueos });
 }
 
 export async function getCourtBookings(req, res) {
-  res.status(501).json({ error: 'No implementado aún para MongoDB' });
+  res.status(501).json({ error: 'No implementado aún para SQLite' });
 }
 
 export async function getCourtBlocks(req, res) {
-  res.status(501).json({ error: 'No implementado aún para MongoDB' });
+  res.status(501).json({ error: 'No implementado aún para SQLite' });
 } 

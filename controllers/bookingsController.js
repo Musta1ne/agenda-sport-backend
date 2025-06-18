@@ -1,67 +1,61 @@
-import Reserva from '../models/Reserva.js';
-import Cancha from '../models/Cancha.js';
-import Bloqueo from '../models/Bloqueo.js';
-
 export async function getAllBookings(req, res) {
-  // Listar todas las reservas, incluyendo datos de la cancha
-  const reservas = await Reserva.find().populate('id_cancha');
+  const db = req.app.locals.db;
+  // Trae todas las reservas y el nombre de la cancha asociada
+  const reservas = await db.all(`
+    SELECT r.*, c.nombre as cancha_nombre
+    FROM reservas r
+    LEFT JOIN canchas c ON r.id_cancha = c.id
+  `);
   res.json(reservas);
 }
 
 export async function createBooking(req, res) {
-  const { id_cancha, fecha, hora_inicio, hora_fin, comentario, monto, metodo_pago, nombre, apellido } = req.body;
+  const db = req.app.locals.db;
+  const { id_cancha, fecha, hora_inicio, hora_fin, comentario, nombre_usuario, telefono } = req.body;
+
   // Validar solapamiento con reservas activas
-  const solapada = await Reserva.findOne({
-    id_cancha,
-    fecha,
-    estado: 'activa',
-    $or: [
-      { hora_inicio: { $lt: hora_fin }, hora_fin: { $gt: hora_inicio } },
-      { hora_inicio: { $lt: hora_inicio }, hora_fin: { $gt: hora_inicio } },
-      { hora_inicio: { $gte: hora_inicio }, hora_fin: { $lte: hora_fin } }
-    ]
-  });
+  const solapada = await db.get(
+    `SELECT * FROM reservas WHERE id_cancha = ? AND fecha = ? AND estado = 'activa'
+      AND ((hora_inicio < ? AND hora_fin > ?) OR (hora_inicio < ? AND hora_fin > ?) OR (hora_inicio >= ? AND hora_fin <= ?))`,
+    [id_cancha, fecha, hora_fin, hora_inicio, hora_inicio, hora_inicio, hora_inicio, hora_fin]
+  );
+
   // Validar bloqueos
-  const bloqueada = await Bloqueo.findOne({
-    id_cancha,
-    fecha,
-    $or: [
-      { hora_inicio: { $lt: hora_fin }, hora_fin: { $gt: hora_inicio } },
-      { hora_inicio: { $lt: hora_inicio }, hora_fin: { $gt: hora_inicio } },
-      { hora_inicio: { $gte: hora_inicio }, hora_fin: { $lte: hora_fin } }
-    ]
-  });
+  const bloqueada = await db.get(
+    `SELECT * FROM bloqueos WHERE id_cancha = ? AND fecha = ?
+      AND ((hora_inicio < ? AND hora_fin > ?) OR (hora_inicio < ? AND hora_fin > ?) OR (hora_inicio >= ? AND hora_fin <= ?))`,
+    [id_cancha, fecha, hora_fin, hora_inicio, hora_inicio, hora_inicio, hora_inicio, hora_fin]
+  );
+
   if (solapada || bloqueada) {
     return res.status(409).json({ error: 'La cancha no está disponible en ese horario.' });
   }
+
   const now = new Date().toISOString();
-  const reserva = await Reserva.create({
-    id_cancha,
-    fecha,
-    hora_inicio,
-    hora_fin,
-    estado: 'activa',
-    fecha_creacion: now,
-    comentario: comentario || '',
-    nombre,
-    apellido
-  });
+  const result = await db.run(
+    `INSERT INTO reservas (id_cancha, fecha, hora_inicio, hora_fin, estado, nombre_usuario, telefono)
+     VALUES (?, ?, ?, ?, 'activa', ?, ?)`,
+    [id_cancha, fecha, hora_inicio, hora_fin, nombre_usuario, telefono]
+  );
+  const reserva = await db.get('SELECT * FROM reservas WHERE id = ?', [result.lastID]);
   res.status(201).json(reserva);
 }
 
 export async function deleteBooking(req, res) {
+  const db = req.app.locals.db;
   const { id } = req.params;
-  await Reserva.findByIdAndUpdate(id, { estado: 'cancelada' });
+  await db.run('UPDATE reservas SET estado = ? WHERE id = ?', ['cancelada', id]);
   res.json({ mensaje: 'Reserva cancelada' });
 }
 
 export async function getBooking(req, res) {
+  const db = req.app.locals.db;
   const { id } = req.params;
-  const reserva = await Reserva.findById(id).populate('id_cancha');
+  const reserva = await db.get('SELECT * FROM reservas WHERE id = ?', [id]);
   if (!reserva) return res.status(404).json({ error: 'Reserva no encontrada' });
   res.json(reserva);
 }
 
 export async function updateBooking(req, res) {
-  res.status(501).json({ error: 'No implementado aún para MongoDB' });
-} 
+  res.status(501).json({ error: 'No implementado aún para SQLite' });
+}

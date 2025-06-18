@@ -1,3 +1,5 @@
 export async function getSports(req, res) {
-  res.status(501).json({ error: 'No implementado aún para MongoDB' });
-} 
+  const db = req.app.locals.db;
+  const deportes = await db.all('SELECT * FROM deportes');
+  res.json(deportes);
+}
