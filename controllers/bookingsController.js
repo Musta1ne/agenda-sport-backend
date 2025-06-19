@@ -102,6 +102,19 @@ export async function createBooking(req, res) {
     // Guardar la reserva en el archivo JSON
     try {
       const exportPath = path.resolve('backend/db', 'exported_data.json');
+      // Si el archivo no existe, créalo con la estructura básica
+      if (!fs.existsSync(exportPath)) {
+        fs.writeFileSync(exportPath, JSON.stringify({
+          exportado: new Date().toISOString(),
+          estadisticas: { deportes: 0, canchas: 0, horarios: 0, reservas: 0, bloqueos: 0, pagos: 0 },
+          deportes: [],
+          canchas: [],
+          horarios: [],
+          reservas: [],
+          bloqueos: [],
+          pagos: []
+        }, null, 2));
+      }
       const data = JSON.parse(fs.readFileSync(exportPath, 'utf-8'));
       // Generar nuevo id si es necesario (aquí usamos el id de la BD)
       const nuevaReserva = {
