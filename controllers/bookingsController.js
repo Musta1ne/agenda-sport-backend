@@ -19,6 +19,19 @@ export async function getAllBookings(req, res) {
   }
 }
 
+// Utilidad para actualizar el archivo JSON SOLO en producción
+function updateExportedJson(reservas) {
+  if (process.env.NODE_ENV !== 'production') return;
+  const fs = require('fs');
+  const path = require('path');
+  const exportDir = path.resolve('backend/db');
+  const exportPath = path.join(exportDir, 'exported_data.json');
+  if (!fs.existsSync(exportDir)) {
+    fs.mkdirSync(exportDir, { recursive: true });
+  }
+  fs.writeFileSync(exportPath, JSON.stringify(reservas, null, 2));
+}
+
 export async function createBooking(req, res) {
   const db = req.app.locals.db;
   const { id_cancha, fecha, hora_inicio, hora_fin, comentario, nombre_usuario, telefono } = req.body;
@@ -107,32 +120,34 @@ export async function createBooking(req, res) {
       console.error('Error al guardar la reserva en la base de datos:', err);
     }
 
-    // Guardar la reserva en el archivo JSON
+    // Guardar la reserva en el archivo JSON SOLO en producción
     try {
-      const exportDir = path.resolve('backend/db');
-      const exportPath = path.join(exportDir, 'exported_data.json');
-      if (!fs.existsSync(exportDir)) {
-        fs.mkdirSync(exportDir, { recursive: true });
+      if (process.env.NODE_ENV === 'production') {
+        const exportDir = path.resolve('backend/db');
+        const exportPath = path.join(exportDir, 'exported_data.json');
+        if (!fs.existsSync(exportDir)) {
+          fs.mkdirSync(exportDir, { recursive: true });
+        }
+        let reservas = [];
+        if (fs.existsSync(exportPath)) {
+          reservas = JSON.parse(fs.readFileSync(exportPath, 'utf-8'));
+          if (!Array.isArray(reservas)) reservas = [];
+        }
+        const nuevaReserva = reserva ? {
+          id: reserva.id,
+          id_cancha: reserva.id_cancha,
+          fecha: reserva.fecha,
+          hora_inicio: reserva.hora_inicio,
+          hora_fin: reserva.hora_fin,
+          estado: reserva.estado,
+          nombre_usuario: reserva.nombre_usuario,
+          telefono: reserva.telefono
+        } : {
+          id_cancha, fecha, hora_inicio, hora_fin, estado: 'activa', nombre_usuario, telefono
+        };
+        reservas.push(nuevaReserva);
+        updateExportedJson(reservas);
       }
-      let reservas = [];
-      if (fs.existsSync(exportPath)) {
-        reservas = JSON.parse(fs.readFileSync(exportPath, 'utf-8'));
-        if (!Array.isArray(reservas)) reservas = [];
-      }
-      const nuevaReserva = reserva ? {
-        id: reserva.id,
-        id_cancha: reserva.id_cancha,
-        fecha: reserva.fecha,
-        hora_inicio: reserva.hora_inicio,
-        hora_fin: reserva.hora_fin,
-        estado: reserva.estado,
-        nombre_usuario: reserva.nombre_usuario,
-        telefono: reserva.telefono
-      } : {
-        id_cancha, fecha, hora_inicio, hora_fin, estado: 'activa', nombre_usuario, telefono
-      };
-      reservas.push(nuevaReserva);
-      fs.writeFileSync(exportPath, JSON.stringify(reservas, null, 2));
     } catch (err) {
       jsonError = err;
       console.error('Error al guardar la reserva en el archivo JSON:', err);
@@ -197,6 +212,17 @@ export async function deleteBooking(req, res) {
     if (isAdmin) {
       // Borrado total sin restricciones
       await db.run('DELETE FROM reservas WHERE id = ?', [id]);
+      // Eliminar del JSON SOLO en producción
+      if (process.env.NODE_ENV === 'production') {
+        const fs = require('fs');
+        const path = require('path');
+        const exportPath = path.join(path.resolve('backend/db'), 'exported_data.json');
+        if (fs.existsSync(exportPath)) {
+          let reservas = JSON.parse(fs.readFileSync(exportPath, 'utf-8'));
+          reservas = reservas.filter(r => String(r.id) !== String(id));
+          updateExportedJson(reservas);
+        }
+      }
       return res.json({ mensaje: 'Reserva eliminada permanentemente por el administrador.' });
     }
 
@@ -219,6 +245,22 @@ export async function deleteBooking(req, res) {
 
     // Cancelar la reserva
     await db.run('UPDATE reservas SET estado = ? WHERE id = ?', ['cancelada', id]);
+    // Marcar como cancelada en el JSON SOLO en producción
+    if (process.env.NODE_ENV === 'production') {
+      const fs = require('fs');
+      const path = require('path');
+      const exportPath = path.join(path.resolve('backend/db'), 'exported_data.json');
+      if (fs.existsSync(exportPath)) {
+        let reservas = JSON.parse(fs.readFileSync(exportPath, 'utf-8'));
+        reservas = reservas.map(r => {
+          if (String(r.id) === String(id)) {
+            return { ...r, estado: 'cancelada' };
+          }
+          return r;
+        });
+        updateExportedJson(reservas);
+      }
+    }
 
     console.log(`Reserva cancelada: ID ${id}, Cancha ${reserva.id_cancha}, Fecha ${reserva.fecha}, Horario ${reserva.hora_inicio}-${reserva.hora_fin}`);
 
@@ -361,4 +403,18 @@ export async function getBookingStats(req, res) {
     console.error('Error al obtener estadísticas:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
+}
+
+// Endpoint para descargar el JSON de reservas (solo en producción)
+export function downloadBookingsJson(req, res) {
+  if (process.env.NODE_ENV !== 'production') {
+    return res.status(403).json({ error: 'Solo disponible en producción' });
+  }
+  const fs = require('fs');
+  const path = require('path');
+  const exportPath = path.join(path.resolve('backend/db'), 'exported_data.json');
+  if (!fs.existsSync(exportPath)) {
+    return res.status(404).json({ error: 'Archivo JSON no encontrado' });
+  }
+  res.download(exportPath, 'reservas.json');
 }

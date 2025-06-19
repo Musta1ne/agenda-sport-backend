@@ -1,5 +1,5 @@
 import express from 'express';
-import { createBooking, getBooking, updateBooking, deleteBooking, getAllBookings, getBookingStats } from '../controllers/bookingsController.js';
+import { createBooking, getBooking, updateBooking, deleteBooking, getAllBookings, getBookingStats, downloadBookingsJson } from '../controllers/bookingsController.js';
 const router = express.Router();
 
 // POST /api/bookings - Crear reserva
@@ -19,5 +19,8 @@ router.delete('/:id', deleteBooking);
 
 // GET /api/bookings - Listar todas las reservas
 router.get('/', getAllBookings);
+
+// GET /api/bookings/download-json - Descargar el archivo JSON de reservas (solo producción)
+router.get('/download-json', downloadBookingsJson);
 
 export default router; 
