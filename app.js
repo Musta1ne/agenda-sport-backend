@@ -14,7 +14,7 @@ import fs from 'fs';
 const app = express();
 const server = createServer(app);
 
-const FRONTEND_URL = process.env.FRONTEND_URL || "https://reservas-frontend-phi.vercel.app";
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://reservas-frontend-tawny.vercel.app";
 const LOCALHOSTS = ["http://localhost:5175", "http://localhost:5173", "http://localhost:5174"];
 const allowedOrigins = process.env.NODE_ENV === 'production' ? [FRONTEND_URL] : [...LOCALHOSTS, FRONTEND_URL];
 
