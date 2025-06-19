@@ -114,19 +114,11 @@ export async function createBooking(req, res) {
       if (!fs.existsSync(exportDir)) {
         fs.mkdirSync(exportDir, { recursive: true });
       }
-      if (!fs.existsSync(exportPath)) {
-        fs.writeFileSync(exportPath, JSON.stringify({
-          exportado: new Date().toISOString(),
-          estadisticas: { deportes: 0, canchas: 0, horarios: 0, reservas: 0, bloqueos: 0, pagos: 0 },
-          deportes: [],
-          canchas: [],
-          horarios: [],
-          reservas: [],
-          bloqueos: [],
-          pagos: []
-        }, null, 2));
+      let reservas = [];
+      if (fs.existsSync(exportPath)) {
+        reservas = JSON.parse(fs.readFileSync(exportPath, 'utf-8'));
+        if (!Array.isArray(reservas)) reservas = [];
       }
-      const data = JSON.parse(fs.readFileSync(exportPath, 'utf-8'));
       const nuevaReserva = reserva ? {
         id: reserva.id,
         id_cancha: reserva.id_cancha,
@@ -139,10 +131,8 @@ export async function createBooking(req, res) {
       } : {
         id_cancha, fecha, hora_inicio, hora_fin, estado: 'activa', nombre_usuario, telefono
       };
-      data.reservas.push(nuevaReserva);
-      data.estadisticas.reservas = data.reservas.length;
-      data.exportado = new Date().toISOString();
-      fs.writeFileSync(exportPath, JSON.stringify(data, null, 2));
+      reservas.push(nuevaReserva);
+      fs.writeFileSync(exportPath, JSON.stringify(reservas, null, 2));
     } catch (err) {
       jsonError = err;
       console.error('Error al guardar la reserva en el archivo JSON:', err);
