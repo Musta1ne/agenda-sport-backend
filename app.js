@@ -4,7 +4,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { connectSQLite } from './db/sqlite.js';
 import courtRoutes from './routes/courts.js';
-import bookingRoutes from './routes/bookings.js';
+import bookingsRouter from './routes/bookings.js';
 import sportRoutes from './routes/sports.js';
 import blockRoutes from './routes/blocks.js';
 import schedulesRoutes from './routes/schedules.js';
@@ -67,7 +67,7 @@ connectSQLite().then(async db => {
 
   // Rutas principales
   app.use('/api/courts', courtRoutes);
-  app.use('/api/bookings', bookingRoutes);
+  app.use('/api/bookings', bookingsRouter);
   app.use('/api/sports', sportRoutes);
   app.use('/api/blocks', blockRoutes);
   app.use('/api/schedules', schedulesRoutes);
