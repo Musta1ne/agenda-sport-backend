@@ -25,6 +25,11 @@ router.get('/', getAllBookings);
 // GET /api/bookings/download-json - Descargar el archivo JSON de reservas (solo producción)
 router.get('/download-json', downloadBookingsJson);
 
+import path from 'path';
+import fs from 'fs';
+
+// ... otras rutas ...
+
 // Endpoint temporal para descargar la base de datos SQLite real en producción
 router.get('/download-db', (req, res) => {
   if (process.env.NODE_ENV !== 'production') {

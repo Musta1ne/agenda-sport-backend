@@ -5,15 +5,11 @@ import fs from 'fs';
 
 // Usar /tmp/database.sqlite en producción, backend/db/database.sqlite en local
 export async function connectSQLite() {
-  let dbPath;
-  if (process.env.NODE_ENV === 'production') {
-    dbPath = '/tmp/database.sqlite';
-    // Si no existe, crea la base de datos vacía
-    if (!fs.existsSync(dbPath)) {
-      fs.writeFileSync(dbPath, '');
-    }
-  } else {
-    dbPath = path.resolve('backend/db', 'database.sqlite');
+  // Siempre usar la misma ruta persistente para la base de datos
+  const dbPath = path.resolve('backend/db', 'database.sqlite');
+  // Si no existe, crea la base de datos vacía
+  if (!fs.existsSync(dbPath)) {
+    fs.writeFileSync(dbPath, '');
   }
 
   const db = await open({
