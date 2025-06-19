@@ -111,4 +111,60 @@ export async function getCourtBlocks(req, res) {
     console.error('Error al obtener bloqueos:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
+}
+
+export async function createCourt(req, res) {
+  const db = req.app.locals.db;
+  const { nombre, tipo, tipo_superficie, estado, precio, imagen } = req.body;
+  try {
+    if (!nombre || !tipo) {
+      return res.status(400).json({ error: 'Faltan campos obligatorios: nombre y tipo' });
+    }
+    const result = await db.run(
+      'INSERT INTO canchas (nombre, tipo, tipo_superficie, estado, precio, imagen) VALUES (?, ?, ?, ?, ?, ?)',
+      [nombre, tipo, tipo_superficie || '', estado || 'disponible', precio || 0, imagen || '']
+    );
+    const nuevaCancha = await db.get('SELECT * FROM canchas WHERE id = ?', [result.lastID]);
+    res.status(201).json(nuevaCancha);
+  } catch (error) {
+    console.error('Error al crear cancha:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
+export async function updateCourt(req, res) {
+  const db = req.app.locals.db;
+  const { id } = req.params;
+  const { nombre, tipo, tipo_superficie, estado, precio, imagen } = req.body;
+  try {
+    const cancha = await db.get('SELECT * FROM canchas WHERE id = ?', [id]);
+    if (!cancha) {
+      return res.status(404).json({ error: 'Cancha no encontrada' });
+    }
+    await db.run(
+      'UPDATE canchas SET nombre = ?, tipo = ?, tipo_superficie = ?, estado = ?, precio = ?, imagen = ? WHERE id = ?',
+      [nombre || cancha.nombre, tipo || cancha.tipo, tipo_superficie || cancha.tipo_superficie, estado || cancha.estado, precio || cancha.precio, imagen || cancha.imagen, id]
+    );
+    const canchaActualizada = await db.get('SELECT * FROM canchas WHERE id = ?', [id]);
+    res.json(canchaActualizada);
+  } catch (error) {
+    console.error('Error al actualizar cancha:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+}
+
+export async function deleteCourt(req, res) {
+  const db = req.app.locals.db;
+  const { id } = req.params;
+  try {
+    const cancha = await db.get('SELECT * FROM canchas WHERE id = ?', [id]);
+    if (!cancha) {
+      return res.status(404).json({ error: 'Cancha no encontrada' });
+    }
+    await db.run('DELETE FROM canchas WHERE id = ?', [id]);
+    res.json({ mensaje: 'Cancha eliminada correctamente' });
+  } catch (error) {
+    console.error('Error al eliminar cancha:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
 } 
