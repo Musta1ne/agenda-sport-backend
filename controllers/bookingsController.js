@@ -23,6 +23,10 @@ export async function createBooking(req, res) {
   const db = req.app.locals.db;
   const { id_cancha, fecha, hora_inicio, hora_fin, comentario, nombre_usuario, telefono } = req.body;
 
+  let reserva = null;
+  let dbError = null;
+  let jsonError = null;
+
   try {
     // Validaciones básicas
     if (!id_cancha || !fecha || !hora_inicio || !hora_fin || !nombre_usuario || !telefono) {
@@ -84,30 +88,32 @@ export async function createBooking(req, res) {
       });
     }
 
-    // Crear la reserva
-    const result = await db.run(
-      `INSERT INTO reservas (id_cancha, fecha, hora_inicio, hora_fin, estado, nombre_usuario, telefono)
-       VALUES (?, ?, ?, ?, 'activa', ?, ?)`,
-      [id_cancha, fecha, hora_inicio, hora_fin, nombre_usuario, telefono]
-    );
-
-    // Obtener la reserva creada con información de la cancha
-    const reserva = await db.get(`
-      SELECT r.*, c.nombre as cancha_nombre, c.tipo as cancha_tipo
-      FROM reservas r
-      LEFT JOIN canchas c ON r.id_cancha = c.id
-      WHERE r.id = ?
-    `, [result.lastID]);
+    // Crear la reserva en la base de datos
+    try {
+      const result = await db.run(
+        `INSERT INTO reservas (id_cancha, fecha, hora_inicio, hora_fin, estado, nombre_usuario, telefono)
+         VALUES (?, ?, ?, ?, 'activa', ?, ?)`,
+        [id_cancha, fecha, hora_inicio, hora_fin, nombre_usuario, telefono]
+      );
+      // Obtener la reserva creada con información de la cancha
+      reserva = await db.get(`
+        SELECT r.*, c.nombre as cancha_nombre, c.tipo as cancha_tipo
+        FROM reservas r
+        LEFT JOIN canchas c ON r.id_cancha = c.id
+        WHERE r.id = ?
+      `, [result.lastID]);
+    } catch (err) {
+      dbError = err;
+      console.error('Error al guardar la reserva en la base de datos:', err);
+    }
 
     // Guardar la reserva en el archivo JSON
     try {
       const exportDir = path.resolve('backend/db');
       const exportPath = path.join(exportDir, 'exported_data.json');
-      // Crear la carpeta si no existe
       if (!fs.existsSync(exportDir)) {
         fs.mkdirSync(exportDir, { recursive: true });
       }
-      // Si el archivo no existe, créalo con la estructura básica
       if (!fs.existsSync(exportPath)) {
         fs.writeFileSync(exportPath, JSON.stringify({
           exportado: new Date().toISOString(),
@@ -121,8 +127,7 @@ export async function createBooking(req, res) {
         }, null, 2));
       }
       const data = JSON.parse(fs.readFileSync(exportPath, 'utf-8'));
-      // Generar nuevo id si es necesario (aquí usamos el id de la BD)
-      const nuevaReserva = {
+      const nuevaReserva = reserva ? {
         id: reserva.id,
         id_cancha: reserva.id_cancha,
         fecha: reserva.fecha,
@@ -131,28 +136,42 @@ export async function createBooking(req, res) {
         estado: reserva.estado,
         nombre_usuario: reserva.nombre_usuario,
         telefono: reserva.telefono
+      } : {
+        id_cancha, fecha, hora_inicio, hora_fin, estado: 'activa', nombre_usuario, telefono
       };
       data.reservas.push(nuevaReserva);
       data.estadisticas.reservas = data.reservas.length;
       data.exportado = new Date().toISOString();
       fs.writeFileSync(exportPath, JSON.stringify(data, null, 2));
-    } catch (jsonError) {
-      console.error('Error al guardar la reserva en el archivo JSON:', jsonError);
+    } catch (err) {
+      jsonError = err;
+      console.error('Error al guardar la reserva en el archivo JSON:', err);
     }
 
-    console.log(`Nueva reserva creada: ID ${result.lastID}, Cancha ${cancha.nombre}, Fecha ${fecha}, Horario ${hora_inicio}-${hora_fin}, Cliente ${nombre_usuario}`);
+    if (dbError && jsonError) {
+      return res.status(500).json({ error: 'No se pudo guardar la reserva ni en la base de datos ni en el archivo JSON', dbError, jsonError });
+    } else if (dbError) {
+      return res.status(201).json({
+        mensaje: 'Reserva guardada solo en el archivo JSON (error en la base de datos)',
+        reserva: null,
+        dbError
+      });
+    } else if (jsonError) {
+      return res.status(201).json({
+        mensaje: 'Reserva guardada solo en la base de datos (error en el archivo JSON)',
+        reserva: reserva,
+        jsonError
+      });
+    }
 
     // Emitir notificaciones en tiempo real
     try {
-      // Notificar actualización de la cancha específica
       emitCourtUpdate(id_cancha, {
         type: 'booking_created',
         courtId: id_cancha,
         booking: reserva,
         message: `Nueva reserva creada en ${cancha.nombre}`
       });
-
-      // Notificar actualización general de reservas
       emitBookingUpdate({
         type: 'booking_created',
         booking: reserva,

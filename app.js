@@ -7,6 +7,8 @@ import courtRoutes from './routes/courts.js';
 import bookingRoutes from './routes/bookings.js';
 import sportRoutes from './routes/sports.js';
 import blockRoutes from './routes/blocks.js';
+import path from 'path';
+import fs from 'fs';
 
 const app = express();
 const server = createServer(app);
@@ -145,6 +147,16 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.static('public'));
+
+// Endpoint para descargar el JSON de reservas (debe estar fuera de connectSQLite)
+app.get('/admin/export-json', (req, res) => {
+  const exportPath = path.resolve('backend/db', 'exported_data.json');
+  if (fs.existsSync(exportPath)) {
+    res.download(exportPath, 'exported_data.json');
+  } else {
+    res.status(404).json({ error: 'No existe el archivo exported_data.json' });
+  }
+});
 
 // Conectar a SQLite y exponer la instancia en app.locals
 connectSQLite().then(async db => {
