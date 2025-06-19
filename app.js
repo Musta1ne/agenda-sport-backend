@@ -58,6 +58,22 @@ app.get('/admin/export-json', (req, res) => {
   }
 });
 
+// Ruta temporal para descargar la base de datos (¡SOLO PARA PRUEBAS!)
+app.get('/admin/download-db', (req, res) => {
+  const isRender = process.env.RENDER === '1';
+  const dbDir = isRender ? '/opt/render/project/data' : path.resolve('backend/db');
+  const dbPath = path.join(dbDir, 'database.sqlite');
+  
+  if (fs.existsSync(dbPath)) {
+    res.download(dbPath, 'database.sqlite');
+  } else {
+    res.status(404).json({ 
+      error: 'No existe el archivo de base de datos',
+      path: dbPath
+    });
+  }
+});
+
 // Conectar a SQLite y exponer la instancia en app.locals
 connectSQLite().then(async db => {
   app.locals.db = db;
