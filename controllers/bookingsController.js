@@ -185,12 +185,19 @@ export async function createBooking(req, res) {
 export async function deleteBooking(req, res) {
   const db = req.app.locals.db;
   const { id } = req.params;
+  const isAdmin = req.query.admin === '1';
 
   try {
     // Verificar que la reserva existe
     const reserva = await db.get('SELECT * FROM reservas WHERE id = ?', [id]);
     if (!reserva) {
       return res.status(404).json({ error: 'Reserva no encontrada' });
+    }
+
+    if (isAdmin) {
+      // Borrado total sin restricciones
+      await db.run('DELETE FROM reservas WHERE id = ?', [id]);
+      return res.json({ mensaje: 'Reserva eliminada permanentemente por el administrador.' });
     }
 
     // Verificar que la reserva no esté ya cancelada
@@ -241,8 +248,8 @@ export async function deleteBooking(req, res) {
     });
 
   } catch (error) {
-    console.error('Error al cancelar reserva:', error);
-    res.status(500).json({ error: 'Error interno del servidor al cancelar la reserva' });
+    console.error('Error al cancelar/eliminar reserva:', error);
+    res.status(500).json({ error: 'Error interno del servidor al cancelar/eliminar la reserva' });
   }
 }
 
