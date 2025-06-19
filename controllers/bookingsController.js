@@ -22,8 +22,6 @@ export async function getAllBookings(req, res) {
 // Utilidad para actualizar el archivo JSON SOLO en producción
 function updateExportedJson(reservas) {
   if (process.env.NODE_ENV !== 'production') return;
-  const fs = require('fs');
-  const path = require('path');
   const exportDir = path.resolve('backend/db');
   const exportPath = path.join(exportDir, 'exported_data.json');
   if (!fs.existsSync(exportDir)) {
@@ -213,8 +211,6 @@ export async function deleteBooking(req, res) {
       }
       // Eliminar del JSON SOLO en producción
       if (process.env.NODE_ENV === 'production') {
-        const fs = require('fs');
-        const path = require('path');
         const exportPath = path.join(path.resolve('backend/db'), 'exported_data.json');
         if (fs.existsSync(exportPath)) {
           let reservas = JSON.parse(fs.readFileSync(exportPath, 'utf-8'));
@@ -258,8 +254,6 @@ export async function deleteBooking(req, res) {
     await db.run('UPDATE reservas SET estado = ? WHERE id = ?', ['cancelada', id]);
     // Marcar como cancelada en el JSON SOLO en producción
     if (process.env.NODE_ENV === 'production') {
-      const fs = require('fs');
-      const path = require('path');
       const exportPath = path.join(path.resolve('backend/db'), 'exported_data.json');
       if (fs.existsSync(exportPath)) {
         let reservas = JSON.parse(fs.readFileSync(exportPath, 'utf-8'));
@@ -421,8 +415,6 @@ export function downloadBookingsJson(req, res) {
   if (process.env.NODE_ENV !== 'production') {
     return res.status(403).json({ error: 'Solo disponible en producción' });
   }
-  const fs = require('fs');
-  const path = require('path');
   const exportPath = path.join(path.resolve('backend/db'), 'exported_data.json');
   if (!fs.existsSync(exportPath)) {
     return res.status(404).json({ error: 'Archivo JSON no encontrado' });
