@@ -101,7 +101,12 @@ export async function createBooking(req, res) {
 
     // Guardar la reserva en el archivo JSON
     try {
-      const exportPath = path.resolve('backend/db', 'exported_data.json');
+      const exportDir = path.resolve('backend/db');
+      const exportPath = path.join(exportDir, 'exported_data.json');
+      // Crear la carpeta si no existe
+      if (!fs.existsSync(exportDir)) {
+        fs.mkdirSync(exportDir, { recursive: true });
+      }
       // Si el archivo no existe, créalo con la estructura básica
       if (!fs.existsSync(exportPath)) {
         fs.writeFileSync(exportPath, JSON.stringify({
