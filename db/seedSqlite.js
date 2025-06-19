@@ -3,7 +3,7 @@ import { connectSQLite } from './sqlite.js';
 async function seed() {
   const db = await connectSQLite();
 
-  // Insertar deportes
+  // Borrar todo
   await db.run("DELETE FROM deportes");
   await db.run("DELETE FROM canchas");
   await db.run("DELETE FROM reservas");
@@ -63,6 +63,7 @@ async function seed() {
       [c.nombre, c.tipo, c.tipo_superficie, c.estado, c.precio, c.imagen, c.id_deporte]
     );
     const canchaId = result.lastID;
+    let horariosCount = 0;
     // Agregar horarios según el tipo de cancha
     if (c.tipo === 'Pádel') {
       // Turnos de 1:30h, de 8:00 a 23:00
@@ -75,6 +76,7 @@ async function seed() {
           [canchaId, 'todos', hInicio, hFin]
         );
         hora += 90;
+        horariosCount++;
       }
     } else {
       // Fútbol 5 y 7: turnos de 1h, de 8:00 a 23:00
@@ -85,8 +87,10 @@ async function seed() {
           "INSERT INTO horarios (id_cancha, dia_semana, hora_inicio, hora_fin, activo) VALUES (?, ?, ?, ?, 1)",
           [canchaId, 'todos', hInicio, hFin]
         );
+        horariosCount++;
       }
     }
+    console.log(`Horarios insertados para ${c.nombre}: ${horariosCount}`);
   }
 
   console.log('Base de datos SQLite poblada con datos de ejemplo.');
