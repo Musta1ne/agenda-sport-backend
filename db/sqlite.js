@@ -3,19 +3,9 @@ import { open } from 'sqlite';
 import path from 'path';
 import fs from 'fs';
 
-// Inicializa y exporta la conexión a la base de datos SQLite
+// Siempre usar el archivo backend/db/database.sqlite como base de datos, en cualquier entorno
 export async function connectSQLite() {
-  let dbPath;
-  if (process.env.NODE_ENV === 'production') {
-    dbPath = '/tmp/database.sqlite';
-    // Si no existe en /tmp, copiar la base de datos inicial
-    const initialDb = path.resolve('db', 'database.sqlite');
-    if (!fs.existsSync(dbPath) && fs.existsSync(initialDb)) {
-      fs.copyFileSync(initialDb, dbPath);
-    }
-  } else {
-    dbPath = path.resolve('db', 'database.sqlite');
-  }
+  const dbPath = path.resolve('backend/db', 'database.sqlite');
 
   const db = await open({
     filename: dbPath,

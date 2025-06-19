@@ -1,5 +1,7 @@
 import express from 'express';
 import { createBooking, getBooking, updateBooking, deleteBooking, getAllBookings, getBookingStats, downloadBookingsJson } from '../controllers/bookingsController.js';
+import path from 'path';
+import fs from 'fs';
 const router = express.Router();
 
 // POST /api/bookings - Crear reserva
@@ -22,5 +24,20 @@ router.get('/', getAllBookings);
 
 // GET /api/bookings/download-json - Descargar el archivo JSON de reservas (solo producción)
 router.get('/download-json', downloadBookingsJson);
+
+// Endpoint temporal para descargar la base de datos SQLite (solo producción)
+router.get('/download-db', (req, res) => {
+  if (process.env.NODE_ENV !== 'production') {
+    return res.status(403).json({ error: 'Solo disponible en producción' });
+  }
+  // Render/Vercel suelen usar /tmp/database.sqlite
+  const dbPath = fs.existsSync('/tmp/database.sqlite')
+    ? '/tmp/database.sqlite'
+    : path.resolve('backend/db/database.sqlite');
+  if (!fs.existsSync(dbPath)) {
+    return res.status(404).json({ error: 'Archivo de base de datos no encontrado' });
+  }
+  res.download(dbPath, 'database.sqlite');
+});
 
 export default router; 
