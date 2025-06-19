@@ -6,7 +6,6 @@ import { connectSQLite } from './db/sqlite.js';
 import courtRoutes from './routes/courts.js';
 import bookingsRouter from './routes/bookings.js';
 import sportRoutes from './routes/sports.js';
-import blockRoutes from './routes/blocks.js';
 import schedulesRoutes from './routes/schedules.js';
 import path from 'path';
 import fs from 'fs';
@@ -69,7 +68,6 @@ connectSQLite().then(async db => {
   app.use('/api/courts', courtRoutes);
   app.use('/api/bookings', bookingsRouter);
   app.use('/api/sports', sportRoutes);
-  app.use('/api/blocks', blockRoutes);
   app.use('/api/schedules', schedulesRoutes);
 
   app.get('/', (req, res) => {

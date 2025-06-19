@@ -7,16 +7,23 @@ export async function getCourts(req, res) {
 export async function getCourtAvailability(req, res) {
   const db = req.app.locals.db;
   const { id } = req.params;
+  const { fecha } = req.query; // Obtener la fecha de la query
   
   try {
     // Obtener todos los horarios fijos de la cancha
     const horarios = await db.all('SELECT * FROM horarios WHERE id_cancha = ? AND activo = 1 ORDER BY hora_inicio', [id]);
     
-    // Obtener reservas activas para esta cancha
-    const reservas = await db.all('SELECT * FROM reservas WHERE id_cancha = ? AND estado = ?', [id, 'activa']);
+    // Obtener reservas activas para esta cancha y fecha específica
+    const reservas = await db.all(
+      'SELECT * FROM reservas WHERE id_cancha = ? AND estado = ? AND fecha = ?', 
+      [id, 'activa', fecha]
+    );
     
-    // Obtener bloqueos para esta cancha
-    const bloqueos = await db.all('SELECT * FROM bloqueos WHERE id_cancha = ?', [id]);
+    // Obtener bloqueos para esta cancha y fecha específica
+    const bloqueos = await db.all(
+      'SELECT * FROM bloqueos WHERE id_cancha = ? AND fecha = ?', 
+      [id, fecha]
+    );
     
     // Obtener información de la cancha
     const cancha = await db.get('SELECT * FROM canchas WHERE id = ?', [id]);
@@ -39,7 +46,7 @@ export async function getCourtAvailability(req, res) {
         bloqueo: null
       };
 
-      // Verificar si está reservado
+      // Verificar si está reservado para esta fecha
       const reserva = reservas.find(r => 
         r.hora_inicio === horario.hora_inicio && 
         r.hora_fin === horario.hora_fin
@@ -50,7 +57,7 @@ export async function getCourtAvailability(req, res) {
         horarioObj.reserva = reserva;
       }
 
-      // Verificar si está bloqueado
+      // Verificar si está bloqueado para esta fecha
       const bloqueo = bloqueos.find(b => 
         b.hora_inicio === horario.hora_inicio && 
         b.hora_fin === horario.hora_fin
