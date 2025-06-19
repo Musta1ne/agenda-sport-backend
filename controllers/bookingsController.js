@@ -204,14 +204,13 @@ export async function deleteBooking(req, res) {
 
   try {
     // Verificar que la reserva existe
-    const reserva = await db.get('SELECT * FROM reservas WHERE id = ?', [id]);
-    if (!reserva) {
-      return res.status(404).json({ error: 'Reserva no encontrada' });
-    }
+    let reserva = await db.get('SELECT * FROM reservas WHERE id = ?', [id]);
 
     if (isAdmin) {
       // Borrado total sin restricciones
-      await db.run('DELETE FROM reservas WHERE id = ?', [id]);
+      if (reserva) {
+        await db.run('DELETE FROM reservas WHERE id = ?', [id]);
+      }
       // Eliminar del JSON SOLO en producción
       if (process.env.NODE_ENV === 'production') {
         const fs = require('fs');
@@ -219,11 +218,23 @@ export async function deleteBooking(req, res) {
         const exportPath = path.join(path.resolve('backend/db'), 'exported_data.json');
         if (fs.existsSync(exportPath)) {
           let reservas = JSON.parse(fs.readFileSync(exportPath, 'utf-8'));
+          const antes = reservas.length;
           reservas = reservas.filter(r => String(r.id) !== String(id));
           updateExportedJson(reservas);
+          if (antes !== reservas.length) {
+            return res.json({ mensaje: 'Reserva eliminada del archivo JSON (y de la base de datos si existía).' });
+          }
         }
       }
-      return res.json({ mensaje: 'Reserva eliminada permanentemente por el administrador.' });
+      if (reserva) {
+        return res.json({ mensaje: 'Reserva eliminada permanentemente por el administrador.' });
+      } else {
+        return res.status(200).json({ mensaje: 'Reserva no encontrada en la base de datos, pero se intentó eliminar del JSON.' });
+      }
+    }
+
+    if (!reserva) {
+      return res.status(404).json({ error: 'Reserva no encontrada' });
     }
 
     // Verificar que la reserva no esté ya cancelada
