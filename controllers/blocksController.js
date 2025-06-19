@@ -61,8 +61,16 @@ export async function deleteBlock(req, res) {
     if (!block) {
       return res.status(404).json({ error: 'Bloqueo/horario no encontrado' });
     }
+    // Buscar y eliminar la reserva asociada (si existe)
+    const reserva = await db.get(
+      'SELECT * FROM reservas WHERE id_cancha = ? AND fecha = ? AND hora_inicio = ? AND hora_fin = ? AND estado = "activa"',
+      [block.id_cancha, block.fecha, block.hora_inicio, block.hora_fin]
+    );
+    if (reserva) {
+      await db.run('DELETE FROM reservas WHERE id = ?', [reserva.id]);
+    }
     await db.run('DELETE FROM bloqueos WHERE id = ?', [id]);
-    res.json({ mensaje: 'Bloqueo/horario eliminado correctamente' });
+    res.json({ mensaje: 'Bloqueo/horario y reserva asociada eliminados correctamente' });
   } catch (error) {
     console.error('Error al eliminar bloqueo:', error);
     res.status(500).json({ error: 'Error interno del servidor' });
