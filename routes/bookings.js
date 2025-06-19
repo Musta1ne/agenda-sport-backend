@@ -1,9 +1,12 @@
 import express from 'express';
-import { createBooking, getBooking, updateBooking, deleteBooking, getAllBookings } from '../controllers/bookingsController.js';
+import { createBooking, getBooking, updateBooking, deleteBooking, getAllBookings, getBookingStats } from '../controllers/bookingsController.js';
 const router = express.Router();
 
 // POST /api/bookings - Crear reserva
 router.post('/', createBooking);
+
+// GET /api/bookings/stats - Obtener estadísticas de reservas
+router.get('/stats', getBookingStats);
 
 // GET /api/bookings/:id - Obtener detalles de una reserva
 router.get('/:id', getBooking);
