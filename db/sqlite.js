@@ -6,7 +6,12 @@ import fs from 'fs';
 // Usar /tmp/database.sqlite en producción, backend/db/database.sqlite en local
 export async function connectSQLite() {
   // Siempre usar la misma ruta persistente para la base de datos
-  const dbPath = path.resolve('backend/db', 'database.sqlite');
+  const dbDir = path.resolve('backend/db');
+  const dbPath = path.join(dbDir, 'database.sqlite');
+  // Crear la carpeta si no existe
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
   // Si no existe, crea la base de datos vacía
   if (!fs.existsSync(dbPath)) {
     fs.writeFileSync(dbPath, '');
