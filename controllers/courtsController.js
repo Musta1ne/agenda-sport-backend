@@ -1,177 +1,156 @@
-export async function getCourts(req, res) {
-  const db = req.app.locals.db;
-  const courts = await db.all('SELECT * FROM canchas');
-  res.json(courts);
-}
+import { db } from '../models/index.js';
+import { Op } from 'sequelize';
 
-export async function getCourtAvailability(req, res) {
-  const db = req.app.locals.db;
-  const { id } = req.params;
-  const { fecha } = req.query; // Obtener la fecha de la query
-  
+const { Court, Sport, Booking, Schedule } = db;
+
+// @desc    Obtener todas las canchas (con su deporte)
+// @route   GET /api/courts
+export const getCourts = async (req, res) => {
   try {
-    // Obtener todos los horarios fijos de la cancha
-    const horarios = await db.all('SELECT * FROM horarios WHERE id_cancha = ? AND activo = 1 ORDER BY hora_inicio', [id]);
-    
-    // Obtener reservas activas para esta cancha y fecha específica
-    const reservas = await db.all(
-      'SELECT * FROM reservas WHERE id_cancha = ? AND estado = ? AND fecha = ?', 
-      [id, 'activa', fecha]
-    );
-    
-    // Obtener bloqueos para esta cancha y fecha específica
-    const bloqueos = await db.all(
-      'SELECT * FROM bloqueos WHERE id_cancha = ? AND fecha = ?', 
-      [id, fecha]
-    );
-    
-    // Obtener información de la cancha
-    const cancha = await db.get('SELECT * FROM canchas WHERE id = ?', [id]);
-    
-    if (!cancha) {
-      return res.status(404).json({ error: 'Cancha no encontrada' });
-    }
-
-    // Crear un mapa de horarios con su estado
-    const horariosConEstado = horarios.map(horario => {
-      const horarioObj = {
-        id: horario.id,
-        id_cancha: horario.id_cancha,
-        dia_semana: horario.dia_semana,
-        hora_inicio: horario.hora_inicio,
-        hora_fin: horario.hora_fin,
-        activo: horario.activo,
-        estado: 'disponible',
-        reserva: null,
-        bloqueo: null
-      };
-
-      // Verificar si está reservado para esta fecha
-      const reserva = reservas.find(r => 
-        r.hora_inicio === horario.hora_inicio && 
-        r.hora_fin === horario.hora_fin
-      );
-      
-      if (reserva) {
-        horarioObj.estado = 'reservado';
-        horarioObj.reserva = reserva;
-      }
-
-      // Verificar si está bloqueado para esta fecha
-      const bloqueo = bloqueos.find(b => 
-        b.hora_inicio === horario.hora_inicio && 
-        b.hora_fin === horario.hora_fin
-      );
-      
-      if (bloqueo) {
-        horarioObj.estado = 'bloqueado';
-        horarioObj.bloqueo = bloqueo;
-      }
-
-      return horarioObj;
+    const courts = await Court.findAll({
+      include: { model: Sport, attributes: ['id', 'nombre'] },
+      order: [['nombre', 'ASC']],
     });
+    res.json(courts);
+  } catch (error) {
+    console.error('Error al obtener canchas:', error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
 
-    res.json({
-      cancha: {
-        id: cancha.id,
-        nombre: cancha.nombre,
-        tipo: cancha.tipo,
-        tipo_superficie: cancha.tipo_superficie,
-        estado: cancha.estado,
-        precio: cancha.precio,
-        imagen: cancha.imagen
-      },
-      horarios: horariosConEstado,
-      total_horarios: horariosConEstado.length,
-      disponibles: horariosConEstado.filter(h => h.estado === 'disponible').length,
-      reservados: horariosConEstado.filter(h => h.estado === 'reservado').length,
-      bloqueados: horariosConEstado.filter(h => h.estado === 'bloqueado').length
+// @desc    Obtener una cancha por ID (con su deporte)
+// @route   GET /api/courts/:id
+export const getCourtById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const court = await Court.findByPk(id, {
+      include: { model: Sport, attributes: ['id', 'nombre'] },
     });
-    
-  } catch (error) {
-    console.error('Error al obtener disponibilidad:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
-  }
-}
-
-export async function getCourtBookings(req, res) {
-  const db = req.app.locals.db;
-  const { id } = req.params;
-  
-  try {
-    const reservas = await db.all('SELECT * FROM reservas WHERE id_cancha = ? ORDER BY fecha DESC, hora_inicio', [id]);
-    res.json(reservas);
-  } catch (error) {
-    console.error('Error al obtener reservas:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
-  }
-}
-
-export async function getCourtBlocks(req, res) {
-  const db = req.app.locals.db;
-  const { id } = req.params;
-  
-  try {
-    const bloqueos = await db.all('SELECT * FROM bloqueos WHERE id_cancha = ? ORDER BY fecha DESC, hora_inicio', [id]);
-    res.json(bloqueos);
-  } catch (error) {
-    console.error('Error al obtener bloqueos:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
-  }
-}
-
-export async function createCourt(req, res) {
-  const db = req.app.locals.db;
-  const { nombre, tipo, tipo_superficie, estado, precio, imagen } = req.body;
-  try {
-    if (!nombre || !tipo) {
-      return res.status(400).json({ error: 'Faltan campos obligatorios: nombre y tipo' });
+    if (!court) {
+      return res.status(404).json({ message: 'Cancha no encontrada.' });
     }
-    const result = await db.run(
-      'INSERT INTO canchas (nombre, tipo, tipo_superficie, estado, precio, imagen) VALUES (?, ?, ?, ?, ?, ?)',
-      [nombre, tipo, tipo_superficie || '', estado || 'disponible', precio || 0, imagen || '']
-    );
-    const nuevaCancha = await db.get('SELECT * FROM canchas WHERE id = ?', [result.lastID]);
-    res.status(201).json(nuevaCancha);
+    res.json(court);
+  } catch (error) {
+    console.error(`Error al obtener la cancha ${req.params.id}:`, error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+// @desc    Crear una nueva cancha
+// @route   POST /api/courts
+export const createCourt = async (req, res) => {
+  try {
+    const { nombre, tipo, tipo_superficie, estado, precio, imagen, id_deporte } = req.body;
+    const newCourt = await Court.create({ nombre, tipo, tipo_superficie, estado, precio, imagen, id_deporte });
+    res.status(201).json(newCourt);
   } catch (error) {
     console.error('Error al crear cancha:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    res.status(500).json({ message: 'Error interno del servidor.' });
   }
-}
+};
 
-export async function updateCourt(req, res) {
-  const db = req.app.locals.db;
-  const { id } = req.params;
-  const { nombre, tipo, tipo_superficie, estado, precio, imagen } = req.body;
+// @desc    Actualizar una cancha
+// @route   PUT /api/courts/:id
+export const updateCourt = async (req, res) => {
   try {
-    const cancha = await db.get('SELECT * FROM canchas WHERE id = ?', [id]);
-    if (!cancha) {
-      return res.status(404).json({ error: 'Cancha no encontrada' });
+    const { id } = req.params;
+    const court = await Court.findByPk(id);
+    if (!court) {
+      return res.status(404).json({ message: 'Cancha no encontrada.' });
     }
-    await db.run(
-      'UPDATE canchas SET nombre = ?, tipo = ?, tipo_superficie = ?, estado = ?, precio = ?, imagen = ? WHERE id = ?',
-      [nombre || cancha.nombre, tipo || cancha.tipo, tipo_superficie || cancha.tipo_superficie, estado || cancha.estado, precio || cancha.precio, imagen || cancha.imagen, id]
-    );
-    const canchaActualizada = await db.get('SELECT * FROM canchas WHERE id = ?', [id]);
-    res.json(canchaActualizada);
+    await court.update(req.body);
+    const updatedCourt = await Court.findByPk(id, { include: [{ model: Sport, attributes: ['id', 'nombre'] }] });
+    res.json(updatedCourt);
   } catch (error) {
-    console.error('Error al actualizar cancha:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    console.error(`Error al actualizar la cancha ${req.params.id}:`, error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
   }
-}
+};
 
-export async function deleteCourt(req, res) {
-  const db = req.app.locals.db;
-  const { id } = req.params;
+// @desc    Eliminar una cancha
+// @route   DELETE /api/courts/:id
+export const deleteCourt = async (req, res) => {
   try {
-    const cancha = await db.get('SELECT * FROM canchas WHERE id = ?', [id]);
-    if (!cancha) {
-      return res.status(404).json({ error: 'Cancha no encontrada' });
+    const { id } = req.params;
+    const court = await Court.findByPk(id);
+    if (!court) {
+      return res.status(404).json({ message: 'Cancha no encontrada.' });
     }
-    await db.run('DELETE FROM canchas WHERE id = ?', [id]);
-    res.json({ mensaje: 'Cancha eliminada correctamente' });
+    await court.destroy();
+    res.status(204).send();
   } catch (error) {
-    console.error('Error al eliminar cancha:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    console.error(`Error al eliminar la cancha ${req.params.id}:`, error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
   }
-} 
+};
+
+// @desc    Obtener disponibilidad de una cancha para una fecha
+// @route   GET /api/courts/:id/availability
+export const getCourtAvailability = async (req, res) => {
+  const { id } = req.params;
+  const { fecha } = req.query;
+
+  if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return res.status(400).json({ message: "La fecha es un parámetro requerido y debe tener el formato YYYY-MM-DD." });
+  }
+
+  try {
+    const court = await Court.findByPk(id);
+    if (!court) {
+      return res.status(404).json({ message: 'Cancha no encontrada.' });
+    }
+
+    const date = new Date(`${fecha}T00:00:00Z`);
+    const dayOfWeek = date.getUTCDay();
+    const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const dia_semana = dayNames[dayOfWeek];
+
+    console.log(`Buscando horarios para cancha ${id} en fecha ${fecha} (Día: ${dia_semana})`);
+
+    const schedules = await Schedule.findAll({ 
+      where: { 
+        id_cancha: id, 
+        [Op.or]: [
+          { dia_semana: dia_semana },
+          { dia_semana: 'todos' }
+        ],
+        activo: true 
+      }, 
+      order: [['hora_inicio', 'ASC']] 
+    });
+
+    console.log(`Horarios encontrados: ${schedules.length}`);
+
+    const bookings = await Booking.findAll({ where: { id_cancha: id, fecha } });
+
+    const availability = schedules.map(schedule => {
+      const isBooked = bookings.some(b => b.hora_inicio === schedule.hora_inicio);
+      return {
+        hora_inicio: schedule.hora_inicio,
+        hora_fin: schedule.hora_fin,
+        estado: isBooked ? 'reservado' : 'disponible',
+      };
+    });
+
+    res.json({ court, availability });
+  } catch (error) {
+    console.error(`Error al obtener disponibilidad de la cancha ${id}:`, error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+// @desc    Obtener todas las reservas de una cancha
+// @route   GET /api/courts/:id/bookings
+export const getCourtBookings = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const bookings = await Booking.findAll({
+            where: { id_cancha: id },
+            order: [['fecha', 'DESC'], ['hora_inicio', 'ASC']],
+        });
+        res.json(bookings);
+    } catch (error) {
+        console.error(`Error al obtener las reservas de la cancha ${req.params.id}:`, error);
+        res.status(500).json({ message: 'Error interno del servidor.' });
+    }
+}; 

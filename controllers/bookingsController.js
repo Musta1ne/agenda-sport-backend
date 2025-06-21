@@ -1,423 +1,110 @@
-import { emitCourtUpdate, emitBookingUpdate } from '../app.js';
-import fs from 'fs';
-import path from 'path';
+import { db } from '../models/index.js';
 
-export async function getAllBookings(req, res) {
-  const db = req.app.locals.db;
+const { Booking, Court, Sport } = db;
+
+// @desc    Obtener todas las reservas
+// @route   GET /api/bookings
+export const getAllBookings = async (req, res) => {
   try {
-    // Trae todas las reservas y el nombre de la cancha asociada
-    const reservas = await db.all(`
-      SELECT r.*, c.nombre as cancha_nombre, c.tipo as cancha_tipo
-      FROM reservas r
-      LEFT JOIN canchas c ON r.id_cancha = c.id
-      ORDER BY r.fecha DESC, r.hora_inicio DESC
-    `);
-    res.json(reservas);
+    const bookings = await Booking.findAll({
+      include: {
+        model: Court,
+        attributes: ['nombre'],
+        include: { model: Sport, attributes: ['nombre'] }
+      },
+      order: [['fecha', 'DESC'], ['hora_inicio', 'DESC']],
+    });
+    res.json(bookings);
   } catch (error) {
     console.error('Error al obtener reservas:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    res.status(500).json({ message: 'Error interno del servidor.' });
   }
-}
+};
 
-// Utilidad para actualizar el archivo JSON SOLO en producción
-function updateExportedJson(reservas) {
-  if (process.env.NODE_ENV !== 'production') return;
-  const exportDir = path.resolve('backend/db');
-  const exportPath = path.join(exportDir, 'exported_data.json');
-  if (!fs.existsSync(exportDir)) {
-    fs.mkdirSync(exportDir, { recursive: true });
-  }
-  fs.writeFileSync(exportPath, JSON.stringify(reservas, null, 2));
-}
-
-export async function createBooking(req, res) {
-  const db = req.app.locals.db;
-  const { id_cancha, fecha, hora_inicio, hora_fin, comentario, nombre_usuario, telefono } = req.body;
-
-  let reserva = null;
-  let dbError = null;
-  let jsonError = null;
-
+// @desc    Obtener una reserva por ID
+// @route   GET /api/bookings/:id
+export const getBookingById = async (req, res) => {
   try {
-    // Validaciones básicas
-    if (!id_cancha || !fecha || !hora_inicio || !hora_fin || !nombre_usuario || !telefono) {
-      return res.status(400).json({ 
-        error: 'Todos los campos son requeridos: id_cancha, fecha, hora_inicio, hora_fin, nombre_usuario, telefono' 
-      });
-    }
-
-    // Validar que la cancha existe
-    const cancha = await db.get('SELECT * FROM canchas WHERE id = ?', [id_cancha]);
-    if (!cancha) {
-      return res.status(404).json({ error: 'Cancha no encontrada' });
-    }
-
-    // Validar que la fecha no sea en el pasado
-    const fechaReserva = new Date(fecha);
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    if (fechaReserva < hoy) {
-      return res.status(400).json({ error: 'No se pueden hacer reservas para fechas pasadas' });
-    }
-
-    // Validar formato de hora
-    const horaRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-    if (!horaRegex.test(hora_inicio) || !horaRegex.test(hora_fin)) {
-      return res.status(400).json({ error: 'Formato de hora inválido. Use HH:MM' });
-    }
-
-    // Validar que hora_fin sea posterior a hora_inicio
-    const inicio = new Date(`2000-01-01T${hora_inicio}`);
-    const fin = new Date(`2000-01-01T${hora_fin}`);
-    if (fin <= inicio) {
-      return res.status(400).json({ error: 'La hora de fin debe ser posterior a la hora de inicio' });
-    }
-
-    // Validar solapamiento con reservas activas
-    const solapada = await db.get(
-      `SELECT * FROM reservas WHERE id_cancha = ? AND fecha = ? AND estado = 'activa'
-        AND ((hora_inicio < ? AND hora_fin > ?) OR (hora_inicio < ? AND hora_fin > ?) OR (hora_inicio >= ? AND hora_fin <= ?))`,
-      [id_cancha, fecha, hora_fin, hora_inicio, hora_inicio, hora_inicio, hora_inicio, hora_fin]
-    );
-
-    if (solapada) {
-      return res.status(409).json({ 
-        error: 'La cancha no está disponible en ese horario. Ya existe una reserva activa.' 
-      });
-    }
-
-    // Validar bloqueos
-    const bloqueada = await db.get(
-      `SELECT * FROM bloqueos WHERE id_cancha = ? AND fecha = ?
-        AND ((hora_inicio < ? AND hora_fin > ?) OR (hora_inicio < ? AND hora_fin > ?) OR (hora_inicio >= ? AND hora_fin <= ?))`,
-      [id_cancha, fecha, hora_fin, hora_inicio, hora_inicio, hora_inicio, hora_inicio, hora_fin]
-    );
-
-    if (bloqueada) {
-      return res.status(409).json({ 
-        error: 'La cancha está bloqueada en ese horario.' 
-      });
-    }
-
-    // Crear la reserva en la base de datos
-    try {
-      const result = await db.run(
-        `INSERT INTO reservas (id_cancha, fecha, hora_inicio, hora_fin, estado, nombre_usuario, telefono)
-         VALUES (?, ?, ?, ?, 'activa', ?, ?)`,
-        [id_cancha, fecha, hora_inicio, hora_fin, nombre_usuario, telefono]
-      );
-      // Obtener la reserva creada con información de la cancha
-      reserva = await db.get(`
-        SELECT r.*, c.nombre as cancha_nombre, c.tipo as cancha_tipo
-        FROM reservas r
-        LEFT JOIN canchas c ON r.id_cancha = c.id
-        WHERE r.id = ?
-      `, [result.lastID]);
-    } catch (err) {
-      dbError = err;
-      console.error('Error al guardar la reserva en la base de datos:', err);
-    }
-
-    // Guardar la reserva en el archivo JSON SOLO en producción
-    try {
-      if (process.env.NODE_ENV === 'production') {
-        const exportDir = path.resolve('backend/db');
-        const exportPath = path.join(exportDir, 'exported_data.json');
-        if (!fs.existsSync(exportDir)) {
-          fs.mkdirSync(exportDir, { recursive: true });
-        }
-        let reservas = [];
-        if (fs.existsSync(exportPath)) {
-          reservas = JSON.parse(fs.readFileSync(exportPath, 'utf-8'));
-          if (!Array.isArray(reservas)) reservas = [];
-        }
-        const nuevaReserva = reserva ? {
-          id: reserva.id,
-          id_cancha: reserva.id_cancha,
-          fecha: reserva.fecha,
-          hora_inicio: reserva.hora_inicio,
-          hora_fin: reserva.hora_fin,
-          estado: reserva.estado,
-          nombre_usuario: reserva.nombre_usuario,
-          telefono: reserva.telefono
-        } : {
-          id_cancha, fecha, hora_inicio, hora_fin, estado: 'activa', nombre_usuario, telefono
-        };
-        reservas.push(nuevaReserva);
-        updateExportedJson(reservas);
-      }
-    } catch (err) {
-      jsonError = err;
-      console.error('Error al guardar la reserva en el archivo JSON:', err);
-    }
-
-    if (dbError && jsonError) {
-      return res.status(500).json({ error: 'No se pudo guardar la reserva ni en la base de datos ni en el archivo JSON', dbError, jsonError });
-    } else if (dbError) {
-      return res.status(201).json({
-        mensaje: 'Reserva guardada solo en el archivo JSON (error en la base de datos)',
-        reserva: null,
-        dbError
-      });
-    } else if (jsonError) {
-      return res.status(201).json({
-        mensaje: 'Reserva guardada solo en la base de datos (error en el archivo JSON)',
-        reserva: reserva,
-        jsonError
-      });
-    }
-
-    // Emitir notificaciones en tiempo real
-    try {
-      emitCourtUpdate(id_cancha, {
-        type: 'booking_created',
-        courtId: id_cancha,
-        booking: reserva,
-        message: `Nueva reserva creada en ${cancha.nombre}`
-      });
-      emitBookingUpdate({
-        type: 'booking_created',
-        booking: reserva,
-        message: `Nueva reserva: ${nombre_usuario} en ${cancha.nombre}`
-      });
-    } catch (socketError) {
-      console.error('Error al emitir notificación:', socketError);
-    }
-
-    res.status(201).json({
-      mensaje: 'Reserva creada exitosamente',
-      reserva: reserva
+    const { id } = req.params;
+    const booking = await Booking.findByPk(id, {
+      include: {
+        model: Court,
+        attributes: ['nombre']
+      },
     });
+    if (!booking) {
+      return res.status(404).json({ message: 'Reserva no encontrada.' });
+    }
+    res.json(booking);
+  } catch (error) {
+    console.error(`Error al obtener la reserva ${req.params.id}:`, error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
 
+// @desc    Crear una nueva reserva
+// @route   POST /api/bookings
+export const createBooking = async (req, res) => {
+  try {
+    const { id_cancha, fecha, hora_inicio, hora_fin, nombre_usuario, telefono } = req.body;
+    const newBooking = await Booking.create({
+      id_cancha,
+      fecha,
+      hora_inicio,
+      hora_fin,
+      nombre_usuario,
+      telefono,
+      estado: 'activa',
+    });
+    res.status(201).json(newBooking);
   } catch (error) {
     console.error('Error al crear reserva:', error);
-    res.status(500).json({ error: 'Error interno del servidor al crear la reserva' });
+    res.status(500).json({ message: 'Error interno del servidor.' });
   }
-}
+};
 
-export async function deleteBooking(req, res) {
-  const db = req.app.locals.db;
-  const { id } = req.params;
-  const isAdmin = req.query.admin === '1';
-
+// @desc    Actualizar una reserva (ej. cambiar datos del usuario o estado)
+// @route   PUT /api/bookings/:id
+export const updateBooking = async (req, res) => {
   try {
-    // Verificar que la reserva existe
-    let reserva = await db.get('SELECT * FROM reservas WHERE id = ?', [id]);
+    const { id } = req.params;
+    const { nombre_usuario, telefono, estado } = req.body;
 
-    if (isAdmin) {
-      // Borrado total sin restricciones
-      if (reserva) {
-        await db.run('DELETE FROM reservas WHERE id = ?', [id]);
-      }
-      // Eliminar del JSON SOLO en producción
-      if (process.env.NODE_ENV === 'production') {
-        const exportPath = path.join(path.resolve('backend/db'), 'exported_data.json');
-        if (fs.existsSync(exportPath)) {
-          let reservas = JSON.parse(fs.readFileSync(exportPath, 'utf-8'));
-          const antes = reservas.length;
-          reservas = reservas.filter(r => String(r.id) !== String(id));
-          updateExportedJson(reservas);
-          if (antes !== reservas.length) {
-            return res.json({ mensaje: 'Reserva eliminada del archivo JSON (y de la base de datos si existía).' });
-          }
-        }
-      }
-      if (reserva) {
-        return res.json({ mensaje: 'Reserva eliminada permanentemente por el administrador.' });
-      } else {
-        return res.status(200).json({ mensaje: 'Reserva no encontrada en la base de datos, pero se intentó eliminar del JSON.' });
-      }
+    const booking = await Booking.findByPk(id);
+    if (!booking) {
+      return res.status(404).json({ message: 'Reserva no encontrada.' });
     }
 
-    if (!reserva) {
-      return res.status(404).json({ error: 'Reserva no encontrada' });
-    }
+    // Solo actualiza los campos que se envían
+    const updatedData = {};
+    if (nombre_usuario) updatedData.nombre_usuario = nombre_usuario;
+    if (telefono) updatedData.telefono = telefono;
+    if (estado) updatedData.estado = estado;
 
-    // Verificar que la reserva no esté ya cancelada
-    if (reserva.estado === 'cancelada') {
-      return res.status(400).json({ error: 'La reserva ya está cancelada' });
-    }
-
-    // Verificar que no sea muy tarde para cancelar (2 horas antes)
-    const fechaHoraReserva = new Date(`${reserva.fecha}T${reserva.hora_inicio}`);
-    const ahora = new Date();
-    const diffMs = fechaHoraReserva - ahora;
-    const diffHoras = diffMs / (1000 * 60 * 60);
-
-    if (diffHoras < 2) {
-      return res.status(400).json({ 
-        error: 'No se puede cancelar la reserva. Debe cancelar con al menos 2 horas de anticipación.' 
-      });
-    }
-
-    // Cancelar la reserva
-    await db.run('UPDATE reservas SET estado = ? WHERE id = ?', ['cancelada', id]);
-    // Marcar como cancelada en el JSON SOLO en producción
-    if (process.env.NODE_ENV === 'production') {
-      const exportPath = path.join(path.resolve('backend/db'), 'exported_data.json');
-      if (fs.existsSync(exportPath)) {
-        let reservas = JSON.parse(fs.readFileSync(exportPath, 'utf-8'));
-        reservas = reservas.map(r => {
-          if (String(r.id) === String(id)) {
-            return { ...r, estado: 'cancelada' };
-          }
-          return r;
-        });
-        updateExportedJson(reservas);
-      }
-    }
-
-    console.log(`Reserva cancelada: ID ${id}, Cancha ${reserva.id_cancha}, Fecha ${reserva.fecha}, Horario ${reserva.hora_inicio}-${reserva.hora_fin}`);
-
-    // Emitir notificaciones en tiempo real
-    try {
-      // Notificar actualización de la cancha específica
-      emitCourtUpdate(reserva.id_cancha, {
-        type: 'booking_cancelled',
-        courtId: reserva.id_cancha,
-        bookingId: id,
-        message: `Reserva cancelada en cancha ${reserva.id_cancha}`
-      });
-
-      // Notificar actualización general de reservas
-      emitBookingUpdate({
-        type: 'booking_cancelled',
-        bookingId: id,
-        message: `Reserva cancelada: ${reserva.nombre_usuario}`
-      });
-    } catch (socketError) {
-      console.error('Error al emitir notificación:', socketError);
-    }
-
-    res.json({ 
-      mensaje: 'Reserva cancelada exitosamente',
-      reserva: { ...reserva, estado: 'cancelada' }
-    });
-
+    await booking.update(updatedData);
+    res.json(booking);
   } catch (error) {
-    console.error('Error al cancelar/eliminar reserva:', error);
-    res.status(500).json({ error: 'Error interno del servidor al cancelar/eliminar la reserva' });
+    console.error(`Error al actualizar la reserva ${req.params.id}:`, error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
   }
-}
+};
 
-export async function getBooking(req, res) {
-  const db = req.app.locals.db;
-  const { id } = req.params;
-
+// @desc    Eliminar una reserva (borrado físico)
+// @route   DELETE /api/bookings/:id
+export const deleteBooking = async (req, res) => {
   try {
-    const reserva = await db.get(`
-      SELECT r.*, c.nombre as cancha_nombre, c.tipo as cancha_tipo
-      FROM reservas r
-      LEFT JOIN canchas c ON r.id_cancha = c.id
-      WHERE r.id = ?
-    `, [id]);
+    const { id } = req.params;
+    const booking = await Booking.findByPk(id);
 
-    if (!reserva) {
-      return res.status(404).json({ error: 'Reserva no encontrada' });
+    if (!booking) {
+      return res.status(404).json({ message: 'Reserva no encontrada.' });
     }
 
-    res.json(reserva);
-
-  } catch (error) {
-    console.error('Error al obtener reserva:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    await booking.destroy();
+    res.status(204).send();
+  } catch (error)
+    {
+    console.error(`Error al eliminar la reserva ${req.params.id}:`, error);
+    res.status(500).json({ message: 'Error interno del servidor.' });
   }
-}
-
-export async function updateBooking(req, res) {
-  const db = req.app.locals.db;
-  const { id } = req.params;
-  const { nombre_usuario, telefono, comentario } = req.body;
-
-  try {
-    // Verificar que la reserva existe
-    const reserva = await db.get('SELECT * FROM reservas WHERE id = ?', [id]);
-    if (!reserva) {
-      return res.status(404).json({ error: 'Reserva no encontrada' });
-    }
-
-    // Verificar que la reserva esté activa
-    if (reserva.estado !== 'activa') {
-      return res.status(400).json({ error: 'Solo se pueden modificar reservas activas' });
-    }
-
-    // Actualizar solo los campos permitidos
-    const updates = [];
-    const values = [];
-
-    if (nombre_usuario !== undefined) {
-      updates.push('nombre_usuario = ?');
-      values.push(nombre_usuario);
-    }
-
-    if (telefono !== undefined) {
-      updates.push('telefono = ?');
-      values.push(telefono);
-    }
-
-    if (comentario !== undefined) {
-      updates.push('comentario = ?');
-      values.push(comentario);
-    }
-
-    if (updates.length === 0) {
-      return res.status(400).json({ error: 'No se proporcionaron campos para actualizar' });
-    }
-
-    values.push(id);
-    await db.run(`UPDATE reservas SET ${updates.join(', ')} WHERE id = ?`, values);
-
-    // Obtener la reserva actualizada
-    const reservaActualizada = await db.get(`
-      SELECT r.*, c.nombre as cancha_nombre, c.tipo as cancha_tipo
-      FROM reservas r
-      LEFT JOIN canchas c ON r.id_cancha = c.id
-      WHERE r.id = ?
-    `, [id]);
-
-    console.log(`Reserva actualizada: ID ${id}`);
-
-    res.json({
-      mensaje: 'Reserva actualizada exitosamente',
-      reserva: reservaActualizada
-    });
-
-  } catch (error) {
-    console.error('Error al actualizar reserva:', error);
-    res.status(500).json({ error: 'Error interno del servidor al actualizar la reserva' });
-  }
-}
-
-// Función adicional para obtener estadísticas de reservas
-export async function getBookingStats(req, res) {
-  const db = req.app.locals.db;
-  
-  try {
-    const stats = await db.get(`
-      SELECT 
-        COUNT(*) as total,
-        SUM(CASE WHEN estado = 'activa' THEN 1 ELSE 0 END) as activas,
-        SUM(CASE WHEN estado = 'cancelada' THEN 1 ELSE 0 END) as canceladas,
-        SUM(CASE WHEN fecha >= date('now') THEN 1 ELSE 0 END) as futuras
-      FROM reservas
-    `);
-
-    res.json(stats);
-
-  } catch (error) {
-    console.error('Error al obtener estadísticas:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
-  }
-}
-
-// Endpoint para descargar el JSON de reservas (solo en producción)
-export function downloadBookingsJson(req, res) {
-  if (process.env.NODE_ENV !== 'production') {
-    return res.status(403).json({ error: 'Solo disponible en producción' });
-  }
-  const exportPath = path.join(path.resolve('backend/db'), 'exported_data.json');
-  if (!fs.existsSync(exportPath)) {
-    return res.status(404).json({ error: 'Archivo JSON no encontrado' });
-  }
-  res.download(exportPath, 'reservas.json');
-}
+};

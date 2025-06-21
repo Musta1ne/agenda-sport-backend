@@ -1,8 +1,23 @@
 import express from 'express';
-import { getSports } from '../controllers/sportsController.js';
+import {
+  getAllSports,
+  getSportById,
+  createSport,
+  updateSport,
+  deleteSport,
+} from '../controllers/sportsController.js';
+import { validateSport } from '../middleware/validation.js';
+
 const router = express.Router();
 
-// GET /api/sports - Lista los deportes
-router.get('/', getSports);
+// Rutas para Deportes
+router.route('/')
+  .get(getAllSports)
+  .post(validateSport, createSport);
+
+router.route('/:id')
+  .get(getSportById)
+  .put(validateSport, updateSport)
+  .delete(deleteSport);
 
 export default router; 

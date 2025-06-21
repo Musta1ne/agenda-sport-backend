@@ -1,68 +1,100 @@
-import sqlite3 from 'sqlite3';
+import { db } from '../models/index.js';
 
-export async function getSchedules(req, res) {
-  const db = req.app.locals.db;
+const { Schedule, Court } = db;
+
+// @desc    Obtener todos los horarios
+// @route   GET /api/schedules
+export const getSchedules = async (req, res) => {
   try {
-    const schedules = await db.all('SELECT * FROM horarios ORDER BY id_cancha, dia_semana, hora_inicio');
+    const { courtId } = req.query;
+    const whereClause = courtId ? { id_cancha: courtId } : {};
+    
+    const schedules = await Schedule.findAll({
+      where: whereClause,
+      include: { model: Court, attributes: ['nombre'] },
+      order: [['id_cancha', 'ASC'], ['dia_semana', 'ASC'], ['hora_inicio', 'ASC']],
+    });
     res.json(schedules);
   } catch (error) {
     console.error('Error al obtener horarios:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    res.status(500).json({ message: 'Error interno del servidor' });
   }
-}
+};
 
-export async function createSchedule(req, res) {
-  const db = req.app.locals.db;
-  const { id_cancha, dia_semana, hora_inicio, hora_fin, activo } = req.body;
-  try {
-    if (!id_cancha || !dia_semana || !hora_inicio || !hora_fin) {
-      return res.status(400).json({ error: 'Faltan campos obligatorios' });
+// @desc    Obtener un horario por ID
+// @route   GET /api/schedules/:id
+export const getScheduleById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const schedule = await Schedule.findByPk(id, {
+            include: { model: Court, attributes: ['nombre'] }
+        });
+        if (!schedule) {
+            return res.status(404).json({ message: 'Horario no encontrado' });
+        }
+        res.json(schedule);
+    } catch (error) {
+        console.error('Error al obtener horario:', error);
+        res.status(500).json({ message: 'Error interno del servidor' });
     }
-    const result = await db.run(
-      'INSERT INTO horarios (id_cancha, dia_semana, hora_inicio, hora_fin, activo) VALUES (?, ?, ?, ?, ?)',
-      [id_cancha, dia_semana, hora_inicio, hora_fin, activo !== undefined ? activo : 1]
-    );
-    const nuevoHorario = await db.get('SELECT * FROM horarios WHERE id = ?', [result.lastID]);
-    res.status(201).json(nuevoHorario);
+};
+
+// @desc    Crear un nuevo horario
+// @route   POST /api/schedules
+export const createSchedule = async (req, res) => {
+  try {
+    const { id_cancha, dia_semana, hora_inicio, hora_fin, activo = true } = req.body;
+    
+    const newScheduleData = {
+      id_cancha,
+      dia_semana,
+      hora_inicio,
+      hora_fin,
+      activo
+    };
+    
+    const newSchedule = await Schedule.create(newScheduleData);
+    const scheduleWithCourt = await Schedule.findByPk(newSchedule.id, {
+        include: { model: Court, attributes: ['nombre'] }
+    });
+
+    res.status(201).json(scheduleWithCourt);
   } catch (error) {
     console.error('Error al crear horario:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    res.status(500).json({ message: 'Error interno del servidor' });
   }
-}
+};
 
-export async function updateSchedule(req, res) {
-  const db = req.app.locals.db;
-  const { id } = req.params;
-  const { id_cancha, dia_semana, hora_inicio, hora_fin, activo } = req.body;
+// @desc    Actualizar un horario
+// @route   PUT /api/schedules/:id
+export const updateSchedule = async (req, res) => {
   try {
-    const horario = await db.get('SELECT * FROM horarios WHERE id = ?', [id]);
-    if (!horario) {
-      return res.status(404).json({ error: 'Horario no encontrado' });
+    const { id } = req.params;
+    const schedule = await Schedule.findByPk(id);
+    if (!schedule) {
+      return res.status(404).json({ message: 'Horario no encontrado' });
     }
-    await db.run(
-      'UPDATE horarios SET id_cancha = ?, dia_semana = ?, hora_inicio = ?, hora_fin = ?, activo = ? WHERE id = ?',
-      [id_cancha || horario.id_cancha, dia_semana || horario.dia_semana, hora_inicio || horario.hora_inicio, hora_fin || horario.hora_fin, activo !== undefined ? activo : horario.activo, id]
-    );
-    const horarioActualizado = await db.get('SELECT * FROM horarios WHERE id = ?', [id]);
-    res.json(horarioActualizado);
+    await schedule.update(req.body);
+    res.json(schedule);
   } catch (error) {
     console.error('Error al actualizar horario:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    res.status(500).json({ message: 'Error interno del servidor' });
   }
-}
+};
 
-export async function deleteSchedule(req, res) {
-  const db = req.app.locals.db;
-  const { id } = req.params;
+// @desc    Eliminar un horario
+// @route   DELETE /api/schedules/:id
+export const deleteSchedule = async (req, res) => {
   try {
-    const horario = await db.get('SELECT * FROM horarios WHERE id = ?', [id]);
-    if (!horario) {
-      return res.status(404).json({ error: 'Horario no encontrado' });
+    const { id } = req.params;
+    const schedule = await Schedule.findByPk(id);
+    if (!schedule) {
+      return res.status(404).json({ message: 'Horario no encontrado' });
     }
-    await db.run('DELETE FROM horarios WHERE id = ?', [id]);
-    res.json({ mensaje: 'Horario eliminado correctamente' });
+    await schedule.destroy();
+    res.status(204).send();
   } catch (error) {
     console.error('Error al eliminar horario:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    res.status(500).json({ message: 'Error interno del servidor' });
   }
-} 
+}; 

@@ -6,6 +6,7 @@
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
+    "dev": "nodemon app.js",
     "seed": "node db/seedSqlite.js"
   },
   "devDependencies": {
@@ -15,8 +16,10 @@
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "express-validator": "^7.2.1",
+    "sequelize": "^6.37.7",
     "socket.io": "^4.8.1",
     "sqlite": "^5.1.1",
-    "sqlite3": "^5.1.6"
+    "sqlite3": "^5.1.7"
   }
 }
