@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
+import dotenv from 'dotenv';
 
 // Importar sincronización de la base de datos y modelos
 import { syncDatabase } from './models/index.js';
@@ -11,6 +12,7 @@ import sportsRouter from './routes/sports.js';
 import courtsRouter from './routes/courts.js';
 import bookingsRouter from './routes/bookings.js';
 import schedulesRouter from './routes/schedules.js';
+import adminRouter from './routes/admin.js';
 // Futuras rutas se añadirán aquí
 
 const app = express();
@@ -32,6 +34,7 @@ app.use('/api/sports', sportsRouter);
 app.use('/api/courts', courtsRouter);
 app.use('/api/bookings', bookingsRouter);
 app.use('/api/schedules', schedulesRouter);
+app.use('/api/admin', adminRouter);
 
 app.get('/', (req, res) => {
   res.send('API de Reservas de Canchas funcionando con Sequelize.');
@@ -48,6 +51,12 @@ app.get('/admin/download-db', (req, res) => {
   } else {
     res.status(404).send('Database file not found.');
   }
+});
+
+// Middleware para manejo de errores (debe ir al final)
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send('Something broke!');
 });
 
 // --- Arranque del Servidor ---
