@@ -32,12 +32,6 @@ API RESTful para gestionar reservas de canchas deportivas. Permite administrar d
 - **Almacenamiento Persistente**: Configuración para Render con disco persistente
 - **API RESTful**: Endpoints siguiendo convenciones REST
 
-## Scripts Disponibles
-
-- `npm start` - Iniciar servidor en producción
-- `npm run dev` - Iniciar servidor en desarrollo con nodemon
-- `npm run seed` - Poblar la base de datos con datos iniciales
-
 ## Base de Datos
 
 La aplicación utiliza SQLite como base de datos principal. En desarrollo, la base de datos se almacena localmente en `backend/db/database.sqlite`. En producción (Render), se utiliza un disco persistente en `/opt/render/project/data/database.sqlite`.
